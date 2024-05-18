@@ -1,31 +1,32 @@
 import { Injectable } from '@nestjs/common';
-
-import { v4 } from 'uuid';
+import { InjectModel } from '@nestjs/sequelize';
 
 import { Cart } from '../models';
 
 @Injectable()
 export class CartService {
-  private userCarts: Record<string, Cart> = {};
+  constructor(@InjectModel(Cart) private cartModel: typeof Cart) {}
 
-  findByUserId(userId: string): Cart {
-    return this.userCarts[ userId ];
+  findByUserId(userId: string): Promise<Cart> {
+    return this.cartModel.findOne({
+      where: {
+        user_id: userId,
+      },
+    });
   }
 
-  createByUserId(userId: string) {
-    const id = v4(v4());
-    const userCart = {
-      id,
+  createByUserId(userId: string): Promise<Cart> {
+    return this.cartModel.create({
+      user_id: userId,
+      created_at: new Date(),
+      updated_at: new Date(),
+      status: 'OPEN',
       items: [],
-    };
-
-    this.userCarts[ userId ] = userCart;
-
-    return userCart;
+    });
   }
 
-  findOrCreateByUserId(userId: string): Cart {
-    const userCart = this.findByUserId(userId);
+  async findOrCreateByUserId(userId: string): Promise<Cart> {
+    const userCart = await this.findByUserId(userId);
 
     if (userCart) {
       return userCart;
@@ -34,22 +35,25 @@ export class CartService {
     return this.createByUserId(userId);
   }
 
-  updateByUserId(userId: string, { items }: Cart): Cart {
-    const { id, ...rest } = this.findOrCreateByUserId(userId);
-
-    const updatedCart = {
-      id,
-      ...rest,
-      items: [ ...items ],
-    }
-
-    this.userCarts[ userId ] = { ...updatedCart };
-
-    return { ...updatedCart };
+  async updateByUserId(userId: string, { items }: Cart): Promise<Cart> {
+    return await this.cartModel.update(
+      {
+        items: [...items],
+      },
+      {
+        where: {
+          user_id: userId,
+        },
+        returning: true,
+      },
+    )[1].dataValues;
   }
 
-  removeByUserId(userId): void {
-    this.userCarts[ userId ] = null;
+  async removeByUserId(userId): Promise<void> {
+    await this.cartModel.destroy({
+      where: {
+        user_id: userId,
+      },
+    });
   }
-
 }

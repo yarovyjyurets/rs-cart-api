@@ -1,0 +1,61 @@
+service: rs-cart-api
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: eu-central-1
+  profile: yurets
+  stage: dev
+  environment:
+    DB_DIALECT: ${self:custom.dbDialect}
+    DB_HOST: !GetAtt CartsDBInstance.Endpoint.Address
+    DB_PORT: !GetAtt CartsDBInstance.Endpoint.Port
+    DB_DATABASE: ${self:custom.dbName}
+    DB_USERNAME: ${self:custom.dbUsername}
+    DB_PASSWORD: ${self:custom.dbPassword}
+
+custom:
+  dbDialect: postgres
+  dbName: carts
+  dbUsername: master
+  dbPassword: password
+
+plugins:
+  - serverless-offline
+
+functions:
+  api:
+    handler: dist/lambda.handler
+    events:
+      - http:
+          method: any
+          path: /{proxy+}
+
+resources:
+  Resources:
+    DBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Access to DB
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 5432
+            ToPort: 5432
+            CidrIp: 0.0.0.0/0
+
+    CartsDBInstance:
+      Type: AWS::RDS::DBInstance
+      Properties:
+        AllocatedStorage: 20
+        DBInstanceClass: db.t4g.small
+        DBInstanceIdentifier: carts-${sls:stage}-instance-2
+        DBName: ${self:custom.dbName}
+        PubliclyAccessible: true
+        MasterUsername: ${self:custom.dbUsername}
+        MasterUserPassword: ${self:custom.dbPassword}
+        Engine: ${self:custom.dbDialect}
+        EngineVersion: "16.1"
+        VPCSecurityGroups:
+          - !GetAtt DBSecurityGroup.GroupId
